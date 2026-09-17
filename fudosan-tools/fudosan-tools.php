@@ -2,7 +2,7 @@
 /**
  * Plugin Name: 不動産売却ツール集
  * Description: 手取り額・譲渡所得税・仲介手数料・固定資産税の日割り・ふるさと納税の上限・囲い込みチェック・特例判定・必要書類・仲介と買取の比較の9つのツールを、ショートコード1本でページに置けます。計算はすべてブラウザ内で完結し、入力値をサーバーへ送りません。
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: ミカタ株式会社
  * License: GPLv2 or later
  * Text Domain: fudosan-tools
@@ -21,7 +21,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('FTL_VER', '1.2.0');
+define('FTL_VER', '1.2.1');
 define('FTL_OPT', 'ftl_options');
 define('FTL_DIR', plugin_dir_path(__FILE__));
 define('FTL_URL', plugin_dir_url(__FILE__));
@@ -175,6 +175,34 @@ function ftl_shortcode_tool($atts) {
 add_shortcode('fudosan_tool', 'ftl_shortcode_tool');
 
 /**
+ * 一覧のリンク先の前半を決める。
+ *   属性 base → 設定画面の値 → 公開済みのツールページから自動で割り出す、の順。
+ *
+ * 自動割り出しは、ツールのスラッグと同じ名前の固定ページを探し、そのURLから
+ * 末尾のスラッグを落とす。/tools/tedori/ が見つかれば /tools/ を得る。
+ * 設定を入れ忘れても動くようにするための保険で、結果は1時間キャッシュする。
+ */
+function ftl_detect_base() {
+    $cached = get_transient('ftl_index_base');
+    if ($cached !== false) return $cached;
+
+    $base = '';
+    foreach (array_keys(ftl_tools()) as $slug) {
+        $pages = get_posts(array(
+            'post_type' => 'page', 'name' => $slug, 'post_status' => 'publish',
+            'numberposts' => 1, 'no_found_rows' => true, 'suppress_filters' => false,
+        ));
+        if (!$pages) continue;
+        $link = get_permalink($pages[0]);
+        if (!$link) continue;
+        $candidate = preg_replace('#' . preg_quote($slug, '#') . '/?$#', '', $link);
+        if ($candidate && $candidate !== $link) { $base = $candidate; break; }
+    }
+    set_transient('ftl_index_base', $base, HOUR_IN_SECONDS);
+    return $base;
+}
+
+/**
  * [fudosan_tools_index]
  *   base="/tools/"        … ツールページのURLの前半。「base + スラッグ + /」がリンク先になる
  *                           省略すると設定画面の値を使う
@@ -190,7 +218,11 @@ function ftl_shortcode_index($atts) {
     ), $atts, 'fudosan_tools_index');
 
     $base = $a['base'] !== '' ? $a['base'] : ftl_opt('index_base');
-    if ($base === '') return '<!-- fudosan_tools_index: base（ツールページのURL）を指定してください -->';
+    if ($base === '') $base = ftl_detect_base();
+    if ($base === '') {
+        return '<!-- fudosan_tools_index: ツールページが見つかりません。'
+             . '各ツールの固定ページを公開するか、設定 → 売却ツール でリンク先の前半を入れてください -->';
+    }
     $base = trailingslashit($base);
 
     $tools = ftl_tools();
@@ -257,6 +289,7 @@ function ftl_sanitize($in) {
     $o['index_base']= esc_url_raw(trim((string) ($in['index_base'] ?? '')));
     $on = isset($in['cta_on']) && is_array($in['cta_on']) ? $in['cta_on'] : array();
     $o['cta_on'] = array_values(array_intersect(array_map('sanitize_key', $on), array_keys(ftl_tools())));
+    delete_transient('ftl_index_base'); // 設定を変えたら自動割り出しを取り直す
     return $o;
 }
 
@@ -335,7 +368,11 @@ function ftl_settings_page() {
             <th scope="row"><label for="ftl-index-base">一覧のリンク先の前半</label></th>
             <td>
               <input type="text" class="regular-text" id="ftl-index-base" name="<?php echo FTL_OPT; ?>[index_base]" value="<?php echo esc_attr($o['index_base']); ?>" placeholder="/tools/">
-              <p class="description"><code>[fudosan_tools_index]</code> のリンク先は「ここ＋スラッグ＋/」になります。</p>
+              <p class="description">
+                <code>[fudosan_tools_index]</code> のリンク先は「ここ＋スラッグ＋/」になります。
+                <strong>空のままでも構いません。</strong>その場合は、ツールのスラッグと同じ名前の
+                公開済み固定ページを探して自動で決めます（例: <code>/tools/tedori/</code> があれば <code>/tools/</code>）。
+              </p>
             </td>
           </tr>
         </table>

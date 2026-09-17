@@ -1,6 +1,6 @@
 {
   "name": "不動産売却ツール集",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/fudosan-tools-plugin/main/fudosan-tools.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "ミカタ株式会社",
   "homepage": "https://github.com/yoshimucom-gif/fudosan-tools-plugin",
   "sections": {
-    "changelog": "1.2.0\n・一覧ショートコードに only / cols / style / title を追加（記事やサイドバーに差し込めるように）\n・style=\"row\" で説明を出さない詰めた並びを追加"
+    "changelog": "1.2.1\n・設定が空でも、公開済みのツールページからリンク先を自動で割り出すようにした"
   }
 }
