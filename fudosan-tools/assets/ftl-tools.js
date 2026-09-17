@@ -1093,4 +1093,483 @@
       };
     }
   };
+
+
+  /* ===================== 10. 離婚の財産分与シミュレーター ===================== */
+
+  T.zaisan = {
+    title: '離婚の財産分与シミュレーター',
+    groups: [
+      { title: '家のこと', fields: [
+        priceField(3000),
+        { k: 'loan', t: 'man', label: '住宅ローンの残債', def: 1500, min: 0, max: 10000, step: 50 },
+        { k: 'howto', t: 'tiles', cols: 2, def: 'sell', label: '家をどうしますか',
+          opts: [{ v: 'sell', l: '売って分ける' }, { v: 'keep', l: '一方が住み続ける' }] }
+      ] },
+      { title: '分け方', fields: [
+        { k: 'ratio', t: 'num', unit: '%', label: '相手の取り分', def: 50, min: 0, max: 100, step: 5,
+          hint: '令和6年の民法改正で2分の1が原則として明文化されました。事情があれば変えられます。' },
+        { k: 'other', t: 'man', label: '家のほかの共有財産', def: 0, min: 0, max: 20000, step: 50, opt: true,
+          hint: '婚姻中に増えた預貯金、保険の解約返戻金、退職金のうち婚姻期間に対応する分など。' },
+        { k: 'tokuyu', t: 'man', label: '特有財産', def: 0, min: 0, max: 20000, step: 50, opt: true,
+          hint: '結婚前から持っていた財産と、相続や贈与で得た財産です。分与の対象から外します。' }
+      ] },
+      { title: '離婚の時期', fields: [
+        { k: 'timing', t: 'tiles', cols: 2, def: 'before', label: 'いまの状況',
+          opts: [{ v: 'before', l: 'まだ離婚していない' }, { v: 'after', l: '離婚が成立した' }] },
+        { k: 'rikonYM', t: 'ym', label: '離婚した年月', defY: new Date().getFullYear(), defM: 4,
+          from: 2015, when: function (v) { return v.timing === 'after'; } }
+      ] }
+    ],
+    compute: function (v) {
+      if (!v.price) return { headline: { label: '家の売却見込額を入れてください', value: '—' } };
+
+      var broker = brokerage(v.price).normal, st = stamp(v.price);
+      var cost = v.howto === 'sell' ? broker + st : 0;
+      var houseNet = v.price - cost - v.loan;
+      var target = houseNet + v.other - v.tokuyu;
+      var rate = Math.min(100, Math.max(0, v.ratio)) / 100;
+      var partner = Math.round(target * rate);
+      var mine = target - partner;
+
+      var rows = [{ label: '家の売却見込額', value: yen(v.price) }];
+      if (v.howto === 'sell') {
+        rows.push({ label: '仲介手数料', value: '−' + yen(broker), kind: 'minus' });
+        rows.push({ label: '印紙税', value: '−' + yen(st), kind: 'minus' });
+      }
+      rows.push({ label: '住宅ローンの残債', value: '−' + yen(v.loan), kind: 'minus' });
+      rows.push({ label: '家の純資産', value: yen(houseNet) });
+      if (v.other) rows.push({ label: 'ほかの共有財産', value: '＋' + yen(v.other) });
+      if (v.tokuyu) rows.push({ label: '特有財産', value: '−' + yen(v.tokuyu), kind: 'minus' });
+      rows.push({ label: '分与の対象となる財産', value: yen(target) });
+      rows.push({ label: '相手の取り分（' + v.ratio + '%）', value: yen(partner) });
+      rows.push({ label: '自分の取り分', value: yen(mine), kind: 'total' });
+
+      var flags = [];
+
+      if (houseNet < 0) {
+        flags.push({ level: 'ng', title: '残債が売却見込額を上回っています',
+          text: '不足は' + yen(Math.abs(houseNet)) + 'です。マイナスの財産は原則として分与の対象になりません。売るなら不足分を自己資金で埋めるか、金融機関と任意売却の相談をすることになります。どちらが返済を続けるかも取り決めが必要です。' });
+      }
+
+      if (v.howto === 'keep') {
+        flags.push({ level: 'info', title: '住み続ける側が渡す代償金は ' + yen(Math.max(0, partner)),
+          text: '家を現物で受け取る側が、相手の取り分を現金で渡す形になります。手元にその現金が無い場合、住宅ローンの借り換えや、家を売る選択に戻ることも検討されます。' });
+        flags.push({ level: 'warn', title: 'ローンの名義と住む人がずれると後で揉めます',
+          text: '名義人でない側が住み続ける場合、返済が滞ると住んでいる人が家を失います。名義変更には金融機関の承諾が必要で、断られることもあります。契約前に金融機関へ確認してください。' });
+      }
+
+      if (v.timing === 'before') {
+        flags.push({ level: 'ng', title: '離婚前に名義を移すと3,000万円特別控除が使えません',
+          text: '離婚が成立する前の配偶者への譲渡は、特別の関係がある人への譲渡とみなされ、居住用財産の3,000万円特別控除の対象外になります。離婚が成立したあとに分与すれば控除を使えます。順番だけで税額が変わります。' });
+      } else {
+        flags.push({ level: 'ok', title: '離婚後の分与なので3,000万円特別控除を使えます',
+          text: '離婚が成立したあとの財産分与であれば、居住用財産の3,000万円特別控除の対象になります。使うには確定申告が必要です。' });
+      }
+
+      flags.push({ level: 'warn', title: '不動産を渡した側に譲渡所得税がかかります',
+        text: '財産分与で不動産を渡すと、渡した人が時価で譲渡したものとして扱われ、値上がりしていれば譲渡所得税がかかります。現金を渡すのとは税の扱いが違います。金額は譲渡所得税シミュレーターで確かめられます。' });
+
+      if (v.timing === 'after') {
+        var y = +String(v.rikonYM || '').split('-')[0] || 0;
+        var m = +String(v.rikonYM || '').split('-')[1] || 1;
+        var isNew = (y > 2026) || (y === 2026 && m >= 4);
+        var limit = isNew ? 5 : 2;
+        flags.push({ level: 'warn', title: '請求できる期限は離婚から' + limit + '年',
+          text: isNew
+            ? '2026年4月1日以降に成立した離婚なので、改正後の5年が適用されます。' + (y + limit) + '年' + m + '月ごろが目安です。'
+            : '2026年3月31日までに成立した離婚は、改正前の2年のままです。' + (y + limit) + '年' + m + '月ごろが目安で、改正後の5年は適用されません。' });
+      }
+
+      return {
+        headline: {
+          label: v.howto === 'keep' ? '住み続ける側が渡す代償金' : '自分が受け取る金額',
+          value: Math.abs(Math.round(v.howto === 'keep' ? partner : mine)).toLocaleString('ja-JP'), unit: '円',
+          sub: '分与の対象 ' + man(target) + ' を ' + (100 - v.ratio) + '対' + v.ratio + 'で分けた場合'
+        },
+        bar: target > 0 ? [
+          { label: '自分の取り分', value: Math.max(0, mine), color: '#1F2E43' },
+          { label: '相手の取り分', value: Math.max(0, partner), color: '#BB9C5E' }
+        ] : null,
+        rows: rows, flags: flags,
+        notes: [
+          '分与の割合は令和6年の民法改正で2分の1が原則として明文化されました。専業主婦であっても割合は変わりません。',
+          '財産分与そのものに贈与税はかかりません。ただし分与の額が多すぎる場合や、税を逃れる目的とみなされた場合は課税されることがあります。',
+          '婚姻期間中に増えた分だけが対象です。結婚前から持っていた財産と、相続や贈与で得た財産は特有財産として外します。',
+          '金額は概算です。取り決めの前に弁護士または税理士にご確認ください。'
+        ]
+      };
+    }
+  };
+
+  /* ===================== 11. 住み替えの資金繰りチェック ===================== */
+
+  T.sumikae = {
+    title: '住み替えの資金繰りチェック',
+    groups: [
+      { title: 'いまの家', fields: [
+        { k: 'sellPrice', t: 'man', label: '売却の見込額', def: 3000, min: 0, max: 15000, step: 50 },
+        { k: 'loan', t: 'man', label: '住宅ローンの残債', def: 1500, min: 0, max: 10000, step: 50 }
+      ] },
+      { title: '新しい家', fields: [
+        { k: 'newPrice', t: 'man', label: '購入価格', def: 4000, min: 0, max: 20000, step: 50 },
+        { k: 'jiko', t: 'man', label: '使える自己資金', def: 300, min: 0, max: 10000, step: 10,
+          hint: '貯蓄のうち、住み替えに回せる額です。引越し後の生活費は残しておいてください。' },
+        { k: 'order', t: 'tiles', def: 'sell', label: 'どちらを先にしますか',
+          opts: [
+            { v: 'sell', l: '売り先行', s: '売ってから買う' },
+            { v: 'buy', l: '買い先行', s: '買ってから売る' },
+            { v: 'none', l: 'まだ決めていない' }
+          ] }
+      ] },
+      { title: '先行にともなう負担', fold: true, fields: [
+        { k: 'karizumaiM', t: 'num', unit: 'か月', label: '仮住まいの期間', def: 3, min: 0, max: 24, step: 1,
+          hint: '売り先行のとき、引渡しから新居に入るまでの期間です。', when: function (v) { return v.order !== 'buy'; } },
+        { k: 'karizumai', t: 'yen', label: '仮住まいの月額', def: 150000, min: 0, max: 1000000, step: 10000,
+          hint: '家賃に、2回分の引越し費用をならした額を足してください。', when: function (v) { return v.order !== 'buy'; } },
+        { k: 'doubleM', t: 'num', unit: 'か月', label: '二重返済になる期間', def: 4, min: 0, max: 24, step: 1,
+          hint: '買い先行のとき、新居のローンが始まってから今の家が売れるまでの期間です。', when: function (v) { return v.order !== 'sell'; } },
+        { k: 'doubleY', t: 'yen', label: 'いまの家のローン月額', def: 90000, min: 0, max: 1000000, step: 5000,
+          when: function (v) { return v.order !== 'sell'; } }
+      ] }
+    ],
+    compute: function (v) {
+      if (!v.sellPrice || !v.newPrice) {
+        return { headline: { label: '売却の見込額と購入価格を入れてください', value: '—' } };
+      }
+      var broker = brokerage(v.sellPrice).normal, st = stamp(v.sellPrice);
+      var sellNet = v.sellPrice - broker - st - v.loan;
+      var newCost = Math.round(v.newPrice * 0.07);
+      var extra = 0, extraLabel = '';
+      if (v.order === 'sell') { extra = v.karizumaiM * v.karizumai; extraLabel = '仮住まい ' + v.karizumaiM + 'か月'; }
+      if (v.order === 'buy')  { extra = v.doubleM * v.doubleY;      extraLabel = '二重返済 ' + v.doubleM + 'か月'; }
+      if (v.order === 'none') {
+        var a = v.karizumaiM * v.karizumai, b2 = v.doubleM * v.doubleY;
+        extra = Math.min(a, b2); extraLabel = '先行の負担（少ないほう）';
+      }
+
+      var usable = sellNet + v.jiko;
+      var need = newCost + extra;
+      var left = usable - need;
+
+      var rows = [
+        { label: 'いまの家の売却見込額', value: yen(v.sellPrice) },
+        { label: '仲介手数料', value: '−' + yen(broker), kind: 'minus' },
+        { label: '印紙税', value: '−' + yen(st), kind: 'minus' },
+        { label: '住宅ローンの残債', value: '−' + yen(v.loan), kind: 'minus' },
+        { label: '売って残る現金', value: yen(sellNet) },
+        { label: '自己資金', value: '＋' + yen(v.jiko) },
+        { label: '用意できる現金', value: yen(usable) },
+        { label: '新居の諸費用（購入価格の約7%）', value: '−' + yen(newCost), kind: 'minus' },
+        { label: extraLabel, value: '−' + yen(extra), kind: 'minus' },
+        { label: '頭金に回せる額', value: yen(left), kind: 'total' }
+      ];
+
+      var flags = [];
+      if (sellNet < 0) {
+        flags.push({ level: 'ng', title: '売っても残債が ' + yen(Math.abs(sellNet)) + ' 残ります',
+          text: '売却代金で住宅ローンを返しきれない状態です。自己資金で埋めるか、残債を新居のローンに上乗せする住み替えローンを使うことになります。住み替えローンは審査が厳しく、扱っていない金融機関もあります。' });
+      }
+      if (left < 0) {
+        flags.push({ level: 'ng', title: '現金が ' + yen(Math.abs(left)) + ' 足りません',
+          text: '新居の諸費用と先行の負担を払うだけの現金が足りていません。購入価格を下げる、自己資金を増やす、先行の期間を短くする、のいずれかで埋めることになります。' });
+      } else {
+        flags.push({ level: 'ok', title: '頭金に ' + yen(left) + ' 回せます',
+          text: '新居の諸費用と先行の負担を差し引いた残りです。全額を頭金に入れず、引越し後の生活費を残してください。' });
+      }
+
+      if (v.order === 'buy') {
+        flags.push({ level: 'warn', title: '買い先行は売れない期間の負担が読めません',
+          text: '二重返済が' + v.doubleM + 'か月で終わる前提の計算です。1か月延びるごとに' + yen(v.doubleY) + 'ずつ増えます。売れ残ったときに買取へ切り替えられるか、先に確かめておいてください。' });
+      } else if (v.order === 'sell') {
+        flags.push({ level: 'info', title: '売り先行は資金の見通しが立ちます',
+          text: '売却額が確定してから新居を探すので、予算がずれません。そのかわり仮住まいと2回の引越しが必要になります。' });
+      } else {
+        flags.push({ level: 'info', title: 'どちらにするかで必要な現金が変わります',
+          text: '仮住まい' + v.karizumaiM + 'か月で' + yen(v.karizumaiM * v.karizumai) + '、二重返済' + v.doubleM + 'か月で' + yen(v.doubleM * v.doubleY) + 'です。ここでは少ないほうで計算しています。' });
+      }
+
+      return {
+        headline: { label: '頭金に回せる額', value: Math.round(left).toLocaleString('ja-JP'), unit: '円',
+          sub: '用意できる現金 ' + man(usable) + ' − 必要な現金 ' + man(need) },
+        bar: usable > 0 ? [
+          { label: '頭金に回せる', value: Math.max(0, left), color: '#1F2E43' },
+          { label: '新居の諸費用', value: newCost, color: '#BB9C5E' },
+          { label: extraLabel, value: extra, color: '#7b8794' }
+        ] : null,
+        rows: rows, flags: flags,
+        notes: [
+          '新居の諸費用は購入価格の約7%で計算しています。仲介手数料、登記費用、ローン事務手数料、火災保険、不動産取得税などが含まれます。中古か新築か、ローンの組み方で前後します。',
+          '頭金と住宅ローンの借入可能額は別の話です。借入額は収入と返済比率で決まるため、金融機関の事前審査で確かめてください。',
+          'マイホームの買換えでは、譲渡益が出た場合の買換え特例と、損失が出た場合の損益通算の特例があります。どちらが有利かは金額で変わります。'
+        ]
+      };
+    }
+  };
+
+  /* ===================== 12. オーバーローン診断 ===================== */
+
+  T.overloan = {
+    title: 'オーバーローン診断',
+    groups: [
+      { title: 'お金のこと', fields: [
+        priceField(2500),
+        { k: 'loan', t: 'man', label: '住宅ローンの残債', def: 3000, min: 0, max: 15000, step: 50 },
+        { k: 'jiko', t: 'man', label: '出せる自己資金', def: 0, min: 0, max: 5000, step: 10,
+          hint: '不足分の穴埋めに使える現金です。' }
+      ] },
+      { title: '返済の状況', fields: [
+        { k: 'taino', t: 'tiles', def: 'none', label: '住宅ローンの滞納',
+          opts: [
+            { v: 'none', l: 'していない' },
+            { v: 'short', l: '1〜5か月' },
+            { v: 'long', l: '6か月以上' }
+          ] },
+        { k: 'stage', t: 'tiles', cols: 2, def: 'none', label: '金融機関や裁判所からの通知',
+          opts: [
+            { v: 'none', l: '届いていない' },
+            { v: 'toku', l: '督促状が届いた' },
+            { v: 'kigen', l: '期限の利益喪失' },
+            { v: 'kaishi', l: '競売開始決定' },
+            { v: 'kaisatsu', l: '開札期日が決まった' }
+          ] }
+      ] },
+      { title: '売りにくくなる事情', fields: [
+        { k: 'block', t: 'checks', label: '当てはまるものを選んでください',
+          opts: [
+            { v: 'kyoyu', l: '共有名義で、ほかの名義人がいる', note: '全員の同意がないと売れません' },
+            { v: 'sashiosae', l: '税金や社会保険料の滞納で差押えがある', note: '差押えが外れないと売却できません' },
+            { v: 'hoshou', l: '連帯保証人や連帯債務者がいる' }
+          ], def: [] }
+      ] }
+    ],
+    compute: function (v) {
+      if (!v.price) return { headline: { label: '売却の見込額を入れてください', value: '—' } };
+
+      var broker = brokerage(v.price).normal, st = stamp(v.price);
+      var reg = 2000 + 15000;
+      var net = v.price - broker - st - reg;
+      var gap = v.loan - net;
+      var after = gap - v.jiko;
+      var b = v.block || [];
+      var has = function (x) { return b.indexOf(x) >= 0; };
+
+      var rows = [
+        { label: '売却の見込額', value: yen(v.price) },
+        { label: '仲介手数料', value: '−' + yen(broker), kind: 'minus' },
+        { label: '印紙税', value: '−' + yen(st), kind: 'minus' },
+        { label: '抵当権抹消', value: '−' + yen(reg), kind: 'minus' },
+        { label: '返済に回せる額', value: yen(net) },
+        { label: '住宅ローンの残債', value: '−' + yen(v.loan), kind: 'minus' },
+        { label: gap > 0 ? '不足額' : '完済後に残る額', value: yen(Math.abs(gap)) },
+        { label: '自己資金', value: '＋' + yen(v.jiko) },
+        { label: after > 0 ? '埋めきれない不足' : '手元に残る額', value: yen(Math.abs(after)), kind: 'total' }
+      ];
+
+      var level, title, desc, flags = [];
+
+      if (gap <= 0) {
+        level = 'ok';
+        title = '通常の売却で完済できます';
+        desc = '売却代金でローンを返しきれるアンダーローンの状態です。抵当権も問題なく外せます。手元に' + yen(Math.abs(gap) + v.jiko) + 'が残ります。';
+      } else if (after <= 0) {
+        level = 'warn';
+        title = '自己資金を足せば通常の売却ができます';
+        desc = '不足は' + yen(gap) + 'ですが、自己資金で埋められます。任意売却にする必要はなく、信用情報にも影響しません。';
+      } else if (v.taino === 'none' && v.stage === 'none') {
+        level = 'warn';
+        title = '任意売却より先に、ほかの選択肢があります';
+        desc = '不足が' + yen(after) + '残りますが、滞納がないので金融機関との交渉余地があります。住み替えなら住み替えローン、住み続けたいならリースバックという手もあります。';
+        flags.push({ level: 'info', title: '滞納する前に相談してください',
+          text: '任意売却は滞納が前提の手続きです。滞納していない段階なら、返済条件の見直しや住み替えローンのほうが傷が浅く済みます。滞納が始まると信用情報に記録が残ります。' });
+      } else {
+        level = 'ng';
+        title = '任意売却を検討する段階です';
+        desc = '不足が' + yen(after) + '残り、滞納も始まっています。競売になる前に、金融機関の同意を得て市場で売るのが任意売却です。';
+      }
+
+      if (v.stage === 'kaisatsu') {
+        flags.push({ level: 'ng', title: '開札期日の前日が最終期限です',
+          text: '開札期日を過ぎると買受人が決まり、任意売却はできなくなります。残り時間はほとんどありません。今日のうちに任意売却の実績がある不動産会社へ連絡してください。' });
+      } else if (v.stage === 'kaishi') {
+        flags.push({ level: 'ng', title: '競売の手続きが始まっています',
+          text: '競売開始決定から開札までは半年ほどが目安です。その間なら任意売却に切り替えられますが、買主を見つけて債権者の同意を得るまでに数か月かかります。動くのが早いほど選択肢が残ります。' });
+      } else if (v.stage === 'kigen') {
+        flags.push({ level: 'warn', title: '一括返済を求められている状態です',
+          text: '期限の利益を失うと、分割で返す権利が無くなり残額の一括請求になります。次は保証会社による代位弁済、その後に競売の申し立てへ進みます。' });
+      }
+
+      if (has('kyoyu')) {
+        flags.push({ level: 'ng', title: '共有者全員の同意がないと売れません',
+          text: '一人でも反対すると売却は成立しません。離婚した元配偶者との共有名義や、相続で共有になっている場合はここで止まります。連絡が取れるうちに話をつけてください。' });
+      }
+      if (has('sashiosae')) {
+        flags.push({ level: 'ng', title: '税金の差押えが外れないと売却できません',
+          text: '税務署や自治体による差押えがあると、住宅ローンの債権者が同意しても売れません。分割納付の相談をして差押えを解除してもらう必要があります。' });
+      }
+      if (has('hoshou')) {
+        flags.push({ level: 'warn', title: '連帯保証人にも残債の請求がいきます',
+          text: '売却後に残った債務は、連帯保証人や連帯債務者に請求されます。任意売却を進める前に、その人へ説明しておいてください。' });
+      }
+      if (after > 0 && v.loan > 0 && (net / v.loan) < 0.6) {
+        flags.push({ level: 'warn', title: '債権者が同意しない可能性があります',
+          text: '回収できる額が残債の6割に届いていません。金融機関は回収額が少なすぎると任意売却に同意しないことがあります。売出価格の設定を含めて、専門の会社に相談してください。' });
+      }
+
+      return {
+        verdict: { level: level, title: title, desc: desc },
+        headline: { label: gap > 0 ? '売却代金で埋まらない不足' : '完済後に手元に残る額',
+          value: Math.abs(Math.round(after)).toLocaleString('ja-JP'), unit: '円',
+          sub: '残債 ' + man(v.loan) + ' − 返済に回せる額 ' + man(net) + (v.jiko ? ' − 自己資金 ' + man(v.jiko) : '') },
+        rows: rows, flags: flags,
+        notes: [
+          '任意売却は債権者の同意が前提です。売主が決められるのは売り出すところまでで、最終的な可否は金融機関が判断します。',
+          '競売の開札期日の前日までに引渡しまで終わらせる必要があります。買主探しから決済まで3か月前後かかるため、逆算して動くことになります。',
+          '任意売却をしても残った債務は消えません。分割での返済を交渉することになります。返済の見通しが立たない場合は、弁護士に債務整理を相談する選択肢もあります。',
+          '滞納の記録は信用情報に残ります。期間や影響は機関によって異なります。'
+        ]
+      };
+    }
+  };
+
+  /* ===================== 13. 査定で聞くことリスト ===================== */
+
+  T.shitsumon = {
+    title: '査定で聞くことリスト',
+    groups: [{
+      fields: [
+        { k: 'kind', t: 'tiles', def: 'mansion', label: '売る不動産',
+          opts: [
+            { v: 'mansion', l: 'マンション' },
+            { v: 'kodate', l: '戸建て' },
+            { v: 'tochi', l: '土地' }
+          ] },
+        { k: 'jijo', t: 'checks', label: '当てはまる事情',
+          opts: [
+            { v: 'loan', l: '住宅ローンが残っている' },
+            { v: 'souzoku', l: '相続した不動産' },
+            { v: 'rikon', l: '離婚にともなう売却' },
+            { v: 'sumikae', l: '住み替え先を探している' },
+            { v: 'isogu', l: '売却の期限が決まっている' },
+            { v: 'enpou', l: '物件から遠い場所に住んでいる' },
+            { v: 'akiya', l: '空き家のまま置いている' }
+          ], def: [] },
+        { k: 'plan', t: 'tiles', cols: 2, def: 'compare', label: '査定の受け方',
+          opts: [{ v: 'compare', l: '複数社に頼む' }, { v: 'one', l: '1社に頼む' }] }
+      ]
+    }],
+    compute: function (v) {
+      var j = v.jijo || [];
+      var has = function (x) { return j.indexOf(x) >= 0; };
+      var list = [];
+
+      list.push({ group: '査定額の根拠', items: [
+        { label: 'この査定額の根拠になった成約事例を見せてください', note: '売出事例ではなく、実際に売れた価格かを確かめます' },
+        { label: '事例はいつの取引ですか。何件ありますか' },
+        { label: '査定額で売れなかった場合、次にいくらまで下げる想定ですか' },
+        { label: '売り出してから成約まで、この地域では平均どのくらいかかりますか' }
+      ] });
+
+      list.push({ group: '売却活動のやり方', items: [
+        { label: 'どのポータルサイトに、いつから掲載しますか', note: 'レインズは業者向けです。買主の目に触れるのはポータルサイト' },
+        { label: 'レインズにはいつ登録し、登録証明書はいつもらえますか' },
+        { label: '活動報告は何を書いて、どの頻度で届きますか' },
+        { label: '問い合わせ件数と内見数は、数字で教えてもらえますか' },
+        { label: '他社から問い合わせが来たとき、どう対応しますか', note: '囲い込みが起きていないかを確かめる質問です' },
+        { label: '写真の撮影や間取り図の作成は、御社の負担ですか' }
+      ] });
+
+      list.push({ group: 'お金のこと', items: [
+        { label: '仲介手数料はいくらで、いつ払いますか' },
+        { label: '仲介手数料のほかに請求されるものはありますか', note: '通常の広告費は仲介手数料に含まれます' },
+        { label: '売却にかかる費用の一覧を、書面でもらえますか' },
+        { label: '手元にいくら残る見込みですか' }
+      ] });
+
+      var keiyaku = [
+        { label: '媒介契約はどの種類をすすめますか。その理由は何ですか' },
+        { label: '契約期間は何か月ですか', note: '最長3か月です。自動では更新されません' },
+        { label: '途中で解約したい場合、どうなりますか' }
+      ];
+      if (v.plan === 'one') {
+        keiyaku.push({ label: '他社の査定も受けたいと伝えたら、どう返ってきますか', note: '即決を迫る会社かどうかが分かります' });
+      }
+      list.push({ group: '媒介契約', items: keiyaku });
+
+      var bukken = [];
+      if (v.kind === 'mansion') {
+        bukken.push({ label: '同じマンションで、いま何戸売りに出ていますか' });
+        bukken.push({ label: '管理費と修繕積立金の滞納は、売却前に精算が必要ですか' });
+        bukken.push({ label: '修繕積立金の値上げ予定は買主にどう伝えますか' });
+      } else if (v.kind === 'kodate') {
+        bukken.push({ label: '建物の価値はいくらと見ていますか。土地といくらずつですか' });
+        bukken.push({ label: '境界標は揃っていますか。測量は必要ですか' });
+        bukken.push({ label: '古家付きのまま売るのと、解体してからでは、どちらが高く売れますか' });
+        bukken.push({ label: '設備の不具合はどこまで告知が必要ですか' });
+      } else {
+        bukken.push({ label: '境界の確定測量は必要ですか。費用と期間はどのくらいですか' });
+        bukken.push({ label: '接道の条件で、建てられる建物に制限はありますか' });
+        bukken.push({ label: '地中埋設物が見つかった場合、誰が費用を負担しますか' });
+      }
+      list.push({ group: v.kind === 'mansion' ? 'マンションのこと' : (v.kind === 'kodate' ? '戸建てのこと' : '土地のこと'), items: bukken });
+
+      var jijo = [];
+      if (has('loan')) {
+        jijo.push({ label: '残債が売却額を上回った場合、どうすればよいですか' });
+        jijo.push({ label: '抵当権の抹消はいつ、誰が手配しますか' });
+      }
+      if (has('souzoku')) {
+        jijo.push({ label: '相続登記は済んでいる必要がありますか', note: '2024年4月から相続登記は義務化されています' });
+        jijo.push({ label: '相続した空き家の3,000万円特別控除は使えそうですか' });
+        jijo.push({ label: '共有者が複数いる場合、手続きはどう進みますか' });
+      }
+      if (has('rikon')) {
+        jijo.push({ label: '共有名義のまま売る場合、両方の同意はいつ必要ですか' });
+        jijo.push({ label: '離婚の前と後で、税金の扱いは変わりますか', note: '3,000万円特別控除の可否が変わります' });
+      }
+      if (has('sumikae')) {
+        jijo.push({ label: '売り先行と買い先行、この物件ならどちらをすすめますか' });
+        jijo.push({ label: '買取保証は付けられますか。保証価格と期間はどうなりますか' });
+      }
+      if (has('isogu')) {
+        jijo.push({ label: '期限までに売れなかった場合、買取に切り替えられますか' });
+        jijo.push({ label: '買取の場合、価格はいくらで、いつ現金化できますか' });
+      }
+      if (has('enpou')) {
+        jijo.push({ label: '契約や決済に立ち会えない場合、どう進めますか' });
+        jijo.push({ label: '内見の立ち会いや鍵の管理はお願いできますか' });
+      }
+      if (has('akiya')) {
+        jijo.push({ label: '残置物の処分は誰が手配しますか。費用はいくらですか' });
+        jijo.push({ label: '電気や水道を止めたままで内見はできますか' });
+      }
+      if (jijo.length) list.push({ group: 'この状況で確かめること', items: jijo });
+
+      list.push({ group: '不動産会社と担当者', items: [
+        { label: '宅地建物取引業の免許番号を教えてください', note: '国土交通省のネガティブ情報等検索サイトで行政処分歴を確認できます' },
+        { label: 'この地域で去年、何件くらい売却を扱いましたか' },
+        { label: '担当者が変わることはありますか' }
+      ] });
+
+      var count = list.reduce(function (a, g) { return a + g.items.length; }, 0);
+
+      return {
+        headline: { label: '聞くこと', value: String(count), unit: '項目' },
+        list: list,
+        flags: [
+          { level: 'info', title: '印刷して持っていってください',
+            text: '下の「印刷する」で紙に出せます。その場で答えられるか、書面で出せるかを見ると、その不動産会社の姿勢が分かります。' },
+          { level: 'warn', title: '高い査定額を出した不動産会社が良い会社とはかぎりません',
+            text: '媒介契約を取るために相場より高い額を出し、契約後に値下げを求める進め方があります。額そのものより、その根拠を説明できるかを見てください。' },
+          { level: 'info', title: '答えを控えておく',
+            text: '複数社に同じことを聞くと違いが見えます。特に「他社から問い合わせが来たときの対応」への答えは、あとで確かめられるよう控えておいてください。' }
+        ],
+        notes: [
+          'この一覧は売主が確かめられることを並べたものです。すべてを聞く必要はありません。',
+          '媒介契約の有効期間は最長3か月です。更新には売主からの申出が必要で、自動では更新されません。'
+        ]
+      };
+    }
+  };
+
 })();

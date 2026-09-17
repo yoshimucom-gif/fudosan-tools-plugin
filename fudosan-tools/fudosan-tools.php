@@ -2,7 +2,7 @@
 /**
  * Plugin Name: 不動産売却ツール集
  * Description: 手取り額・譲渡所得税・仲介手数料・固定資産税の日割り・ふるさと納税の上限・囲い込みチェック・特例判定・必要書類・仲介と買取の比較の9つのツールを、ショートコード1本でページに置けます。計算はすべてブラウザ内で完結し、入力値をサーバーへ送りません。
- * Version: 1.2.1
+ * Version: 1.3.0
  * Author: ミカタ株式会社
  * License: GPLv2 or later
  * Text Domain: fudosan-tools
@@ -21,7 +21,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('FTL_VER', '1.2.1');
+define('FTL_VER', '1.3.0');
 define('FTL_OPT', 'ftl_options');
 define('FTL_DIR', plugin_dir_path(__FILE__));
 define('FTL_URL', plugin_dir_url(__FILE__));
