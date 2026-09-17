@@ -108,9 +108,14 @@
 
     var id = uid + '-' + f.k;
 
-    if (f.label) {
-      var lab = el('label', 'ftl-label');
-      lab.htmlFor = id;
+    /* tiles と checks は複数のコントロールをまとめた「かたまり」なので、
+       label[for] ではなく role + aria-labelledby で結びつける。
+       for に単一のIDを書くと、存在しないIDを指すか、最初の1つだけを指してしまう。
+       check（単独）は選択肢の文言そのものがラベルなので、上の見出しを出さない。 */
+    var isGroup = (f.t === 'tiles' || f.t === 'checks');
+    if (f.label && f.t !== 'check') {
+      var lab = el(isGroup ? 'div' : 'label', 'ftl-label');
+      if (isGroup) lab.id = id + '-lab'; else lab.htmlFor = id;
       lab.textContent = f.label;
       if (f.opt) lab.appendChild(el('span', 'ftl-opt', '任意'));
       wrap.appendChild(lab);
@@ -118,6 +123,8 @@
 
     if (f.t === 'tiles') {
       var tiles = el('div', 'ftl-tiles');
+      tiles.setAttribute('role', 'radiogroup');
+      if (f.label) tiles.setAttribute('aria-labelledby', id + '-lab');
       if (f.cols) tiles.classList.add('ftl-t' + f.cols);
       f.opts.forEach(function (o, i) {
         var l = el('label', 'ftl-tile');
@@ -153,6 +160,10 @@
 
     } else if (f.t === 'check' || f.t === 'checks') {
       var box = el('div', 'ftl-checks');
+      if (f.t === 'checks') {
+        box.setAttribute('role', 'group');
+        if (f.label) box.setAttribute('aria-labelledby', id + '-lab');
+      }
       var opts = f.t === 'check' ? [{ v: '1', l: f.text || f.label, note: f.note }] : f.opts;
       opts.forEach(function (o, i) {
         var l = el('label', 'ftl-check');

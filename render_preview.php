@@ -57,13 +57,13 @@ function page($title, $body) {
     return '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
         . '<meta name="viewport" content="width=device-width,initial-scale=1">'
         . '<title>' . esc_html($title) . '</title>'
-        . '<link rel="stylesheet" href="../fudosan-tools/assets/ftl.css">'
+        . '<link rel="stylesheet" href="../fudosan-tools/assets/ftl.css?t=' . time() . '">'
         . '<style>body{margin:0;padding:24px 16px 80px;background:#fff;max-width:900px;margin-inline:auto;'
         . 'font-family:-apple-system,"Hiragino Sans","Noto Sans JP",Meiryo,sans-serif}'
         . 'hr{margin:56px 0;border:0;border-top:1px dashed #ccd}</style>'
         . '</head><body>' . $body
-        . '<script src="../fudosan-tools/assets/ftl.js"></script>'
-        . '<script src="../fudosan-tools/assets/ftl-tools.js"></script>'
+        . '<script src="../fudosan-tools/assets/ftl.js?t=' . time() . '"></script>'
+        . '<script src="../fudosan-tools/assets/ftl-tools.js?t=' . time() . '"></script>'
         . '</body></html>';
 }
 

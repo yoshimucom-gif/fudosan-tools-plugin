@@ -70,7 +70,9 @@
 
   /** 非事業用建物の減価償却費相当額。国税庁 No.3261 */
   function depreciation(bldgCost, struct, holdMonths) {
-    if (bldgCost <= 0) return 0;
+    // 購入年月に譲渡年月より後の月を選べてしまうため、負の経過月数を0に丸める。
+    // 丸めないと償却費が負になり、取得費が購入価格を上回って税額を少なく見積もる。
+    if (bldgCost <= 0 || holdMonths <= 0) return 0;
     var years = Math.floor(holdMonths / 12) + (holdMonths % 12 >= 6 ? 1 : 0); // 6か月以上は1年
     var d = bldgCost * 0.9 * structRate(struct) * years;
     return Math.floor(Math.min(d, bldgCost * 0.95)); // 取得価額の95%が限度
@@ -334,6 +336,9 @@
       { title: '譲渡所得税の計算に使う項目', fold: true, fields: joutoFields }
     ],
     compute: function (v) {
+      // 価格が空のまま費用だけ引くと、大きなマイナスが出て驚かせる
+      if (!v.price) return { headline: { label: '売却価格を入れてください', value: '—' },
+        notes: ['査定額や売り出し価格で構いません。入れるとその場で手取りを計算します。'] };
       var b = brokerage(v.price);
       var broker = v.brokerMode === 'manual' ? v.brokerManual : b.normal;
       var st = stamp(v.price);
@@ -620,10 +625,12 @@
         gMax += x.w;
         if (good.indexOf(x.v) >= 0) gGot += x.w;
       });
-      var penalty = 0;
+      var penalty = 0, acked = 0;
       BAD.forEach(function (x) {
-        if (ippan && x.exclusive) return;
-        if (bad.indexOf(x.v) >= 0) penalty += x.w;
+        if (bad.indexOf(x.v) < 0) return;
+        // 一般媒介では法定義務がないので減点しない。ただし「気にしている」事実は残す
+        if (ippan && x.exclusive) { acked++; return; }
+        penalty += x.w;
       });
 
       var score = Math.max(0, Math.min(100, Math.round(gGot / (gMax || 1) * 100) - penalty));
@@ -643,6 +650,16 @@
         level = 'ng';
         title = '囲い込みが起きている可能性があります';
         desc = '他社からの紹介が断られているのは、囲い込みでもっとも典型的な兆候です。まずは事実を確認してください。';
+      } else if (score >= 70 && acked > 0) {
+        // 一般媒介なので義務違反ではない。ただし売主が気にしている以上、問題なしとは言わない
+        level = 'warn';
+        title = '義務違反ではありませんが、見えていないことがあります';
+        desc = '一般媒介にはレインズ登録も定期報告も義務がないため、減点していません。それでも活動状況が分からない状態は変わらないので、下の指摘を確認してください。';
+      } else if (score >= 70 && bad.length) {
+        // 売主が1つでも気になる点を挙げているなら「問題なし」とは言い切らない
+        level = 'warn';
+        title = '大きな問題は見当たりませんが、確認したい点があります';
+        desc = 'レインズの登録と報告は確認できています。下に挙げた点だけ、担当者に聞いてみてください。';
       } else if (score >= 70) {
         level = 'ok';
         title = '今のところ気になる点は見当たりません';
@@ -670,7 +687,13 @@
 
       BAD.forEach(function (x) {
         if (bad.indexOf(x.v) < 0) return;
-        if (ippan && x.exclusive) return;
+        if (ippan && x.exclusive) {
+          // 一般媒介にはレインズ登録も定期報告も法定義務がないので減点はしない。
+          // ただし黙って無視すると、チェックした項目が消えたように見える
+          flags.push({ level: 'info', title: x.l,
+            text: '一般媒介では、レインズへの登録も定期的な報告も法律上の義務ではありません。そのため義務違反にはあたりませんが、活動状況が見えないことに変わりはありません。任意で登録と報告をしてもらえるか相談するか、専任媒介に切り替えて義務を発生させる方法があります。' });
+          return;
+        }
         var t = {
           noreins: '登録証明書は、レインズに登録したことを示す書類です。渡す義務があるので、まず「登録証明書をください」と伝えてください。証明書に書かれたID とパスワードで、売主自身が公開状況を確認できます。',
           noreport: '報告の頻度は法律で決まっています。届いていないなら、その旨を伝えて書面での報告を求めてください。それでも改善しないときは、契約の更新をしない判断ができます。',
@@ -999,6 +1022,8 @@
       ] }
     ],
     compute: function (v) {
+      if (!v.chukaiPrice || !v.kaitoriPrice) return { headline: { label: '2つの価格を入れてください', value: '—' },
+        notes: ['仲介で売れそうな価格と、買取業者の提示価格の両方が必要です。'] };
       var monthly = Math.round(v.koteiY / 12) + v.kanri + v.kinri;
 
       var cBroker = brokerage(v.chukaiPrice).normal;
