@@ -1,6 +1,6 @@
 {
   "name": "不動産売却ツール集",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/fudosan-tools-plugin/main/fudosan-tools.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "ミカタ株式会社",
   "homepage": "https://github.com/yoshimucom-gif/fudosan-tools-plugin",
   "sections": {
-    "changelog": "1.1.0\n・デザインを刷新（角丸と影をやめ、罫線と余白で組む書類の見た目に）\n・配色をサイトのテーマ設定に合わせた（濃色 #1F2E43／差し色 #BB9C5E）\n・設定画面の色を「濃色」「差し色」の2つに変更\n・一覧カードの全面がボタンとして働くことを明確にした（矢印・ホバー・押下・フォーカス）"
+    "changelog": "1.1.1\n・解説の見出しにテーマの背景色と余白が乗っていたのを打ち消した"
   }
 }

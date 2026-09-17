@@ -45,6 +45,12 @@
 }
 .ftl *, .ftl *::before, .ftl *::after { box-sizing: border-box; }
 .ftl p, .ftl ul, .ftl ol, .ftl h2, .ftl h3, .ftl h4, .ftl h5 { margin: 0; }
+/* テーマ（re:Diver）が .content 配下の見出しに背景と枠を付けるため、ツール内では打ち消す。
+   テーマ側は :where() を使っていて詰め幅が0なので、こちらの .ftl h3 で上書きできる。
+   打ち消したうえで、必要な線だけ下の各ルールで引き直す。 */
+.ftl h2, .ftl h3, .ftl h4, .ftl h5 {
+  background: none; border: 0; padding: 0; border-radius: 0;
+}
 .ftl button { font: inherit; color: inherit; }
 
 /* ---------- 見出し・導入 ---------- */
