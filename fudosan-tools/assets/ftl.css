@@ -350,6 +350,19 @@
 
 /* ---------- ツール一覧（カード全体がボタン） ---------- */
 .ftl-index { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.ftl-index.is-cols-1 { grid-template-columns: 1fr; }
+@media (min-width: 620px) {
+  .ftl-index.is-cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .ftl-index.is-cols-3 { grid-template-columns: repeat(3, 1fr); }
+}
+/* style="row" … 説明を出さず1行ずつ詰める。記事の途中やサイドバー向け */
+.ftl-index.is-row { grid-template-columns: 1fr; gap: 0; border: 1px solid var(--ftl-line); }
+.ftl-index.is-row .ftl-card {
+  border: 0; border-bottom: 1px solid var(--ftl-line); padding: 12px 40px 12px 15px;
+}
+.ftl-index.is-row .ftl-card:last-child { border-bottom: 0; }
+.ftl-index.is-row .ftl-card b { font-size: 14.5px; margin-bottom: 0; }
+.ftl-index.is-row .ftl-card:hover { box-shadow: none; }
 .ftl-card {
   position: relative; display: block;
   padding: 16px 40px 16px 18px;

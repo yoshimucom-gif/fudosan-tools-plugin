@@ -2,7 +2,7 @@
 /**
  * Plugin Name: 不動産売却ツール集
  * Description: 手取り額・譲渡所得税・仲介手数料・固定資産税の日割り・ふるさと納税の上限・囲い込みチェック・特例判定・必要書類・仲介と買取の比較の9つのツールを、ショートコード1本でページに置けます。計算はすべてブラウザ内で完結し、入力値をサーバーへ送りません。
- * Version: 1.1.1
+ * Version: 1.2.0
  * Author: ミカタ株式会社
  * License: GPLv2 or later
  * Text Domain: fudosan-tools
@@ -21,7 +21,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('FTL_VER', '1.1.1');
+define('FTL_VER', '1.2.0');
 define('FTL_OPT', 'ftl_options');
 define('FTL_DIR', plugin_dir_path(__FILE__));
 define('FTL_URL', plugin_dir_url(__FILE__));
@@ -175,25 +175,56 @@ function ftl_shortcode_tool($atts) {
 add_shortcode('fudosan_tool', 'ftl_shortcode_tool');
 
 /**
- * [fudosan_tools_index base="/tools/"]
- * ツール一覧のカード。base はツールページのURLの前半で、
- * 「base + スラッグ + /」がリンク先になる。
+ * [fudosan_tools_index]
+ *   base="/tools/"        … ツールページのURLの前半。「base + スラッグ + /」がリンク先になる
+ *                           省略すると設定画面の値を使う
+ *   only="chukai,jouto"   … このツールだけを、書いた順に出す（記事の内容に合わせて絞る）
+ *   exclude="kotei"       … このツールを外す（only と併用しない）
+ *   cols="1|2|3"          … 列数を固定する。省略すると幅に合わせて折り返す
+ *   style="card|row"      … card=説明つきのカード（既定）／row=1行ずつの詰めた並び
+ *   title="関連する計算ツール" … 見出しを付ける
  */
 function ftl_shortcode_index($atts) {
-    $a = shortcode_atts(array('base' => '', 'exclude' => ''), $atts, 'fudosan_tools_index');
+    $a = shortcode_atts(array(
+        'base' => '', 'only' => '', 'exclude' => '', 'cols' => '', 'style' => 'card', 'title' => '',
+    ), $atts, 'fudosan_tools_index');
+
     $base = $a['base'] !== '' ? $a['base'] : ftl_opt('index_base');
     if ($base === '') return '<!-- fudosan_tools_index: base（ツールページのURL）を指定してください -->';
     $base = trailingslashit($base);
-    $skip = array_filter(array_map('sanitize_key', explode(',', (string) $a['exclude'])));
+
+    $tools = ftl_tools();
+    $keys  = array_keys($tools);
+
+    /* only は書いた順を保つ。存在しないスラッグは黙って捨てる */
+    $only = array_values(array_filter(array_map('sanitize_key',
+        array_map('trim', explode(',', (string) $a['only'])))));
+    if ($only) {
+        $keys = array_values(array_intersect($only, $keys));
+    } else {
+        $skip = array_filter(array_map('sanitize_key',
+            array_map('trim', explode(',', (string) $a['exclude']))));
+        $keys = array_values(array_diff($keys, $skip));
+    }
+    if (!$keys) return '<!-- fudosan_tools_index: 出すツールがありません -->';
 
     ftl_enqueue();
+
+    $cls = 'ftl-index';
+    if (in_array((string) $a['cols'], array('1', '2', '3'), true)) $cls .= ' is-cols-' . $a['cols'];
+    if ($a['style'] === 'row') $cls .= ' is-row';
+
     $style = ftl_accent_style();
-    $out = '<div class="ftl"' . ($style ? ' style="' . esc_attr($style) . '"' : '') . '><div class="ftl-index">';
-    foreach (ftl_tools() as $slug => $t) {
-        if (in_array($slug, $skip, true)) continue;
+    $out  = '<div class="ftl"' . ($style ? ' style="' . esc_attr($style) . '"' : '') . '>';
+    if ($a['title'] !== '') {
+        $out .= '<div class="ftl-head"><h2 class="ftl-title">' . esc_html($a['title']) . '</h2></div>';
+    }
+    $out .= '<div class="' . esc_attr($cls) . '">';
+    foreach ($keys as $slug) {
+        $t = $tools[$slug];
         $out .= '<a class="ftl-card" href="' . esc_url($base . $slug . '/') . '">';
         $out .= '<b>' . esc_html($t['title']) . '</b>';
-        $out .= '<span>' . esc_html($t['lead']) . '</span>';
+        if ($a['style'] !== 'row') $out .= '<span>' . esc_html($t['lead']) . '</span>';
         $out .= '</a>';
     }
     $out .= '</div></div>';
@@ -329,9 +360,19 @@ function ftl_settings_page() {
         </tbody>
       </table>
       <p style="color:#666;max-width:920px">
-        属性：<code>head="off"</code> で見出しと導入文を省略（記事の途中に埋めるとき）、
+        <strong>ツール本体の属性</strong>：<code>head="off"</code> で見出しと導入文を省略（記事の途中に埋めるとき）、
         <code>desc="off"</code> で解説を省略、<code>cta="off"</code> でボタンを省略、
         <code>title="…"</code> で見出しを差し替えます。
+      </p>
+      <p style="color:#666;max-width:920px">
+        <strong>一覧の属性</strong>：<code>only="chukai,jouto"</code> で書いた順に指定のツールだけ、
+        <code>exclude="kotei"</code> で除外、<code>cols="1|2|3"</code> で列数を固定、
+        <code>style="row"</code> で説明を出さない詰めた並び（記事の途中やサイドバー向け）、
+        <code>title="関連する計算ツール"</code> で見出しを付けます。
+        <code>base</code> を省略すると上の「一覧のリンク先の前半」を使います。
+      </p>
+      <p style="color:#666;max-width:920px">
+        例：<code>[fudosan_tools_index only="chukai,tedori" cols="1" style="row" title="この記事に関係する計算ツール"]</code>
       </p>
     </div>
     <?php

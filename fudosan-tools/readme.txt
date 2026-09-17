@@ -22,14 +22,27 @@ License: GPLv2 or later
 8. 売却後の確定申告 必要書類チェックリスト … [fudosan_tool name="shorui"]
 9. 仲介と買取、手元に残るお金の比較 … [fudosan_tool name="hikaku"]
 
-ツール一覧のカードは [fudosan_tools_index base="/tools/"] で出せます。
+ツール一覧のカードは [fudosan_tools_index] で出せます。
 
-= 属性 =
+= ツール本体の属性 =
 
 * head="off" … 見出しと導入文を出さない（記事の途中に埋めるとき）
 * desc="off" … 解説を出さない
 * cta="off" … 結果の下のボタンを出さない
 * title="…" … 見出しを差し替える
+
+= 一覧の属性 =
+
+* base="/tools/" … リンク先の前半。省略すると設定画面の値を使う
+* only="chukai,jouto" … 書いた順に、指定したツールだけを出す
+* exclude="kotei" … 指定したツールを外す
+* cols="1|2|3" … 列数を固定する。省略すると幅に合わせて折り返す
+* style="row" … 説明を出さず1行ずつ詰める（記事の途中やサイドバー向け）
+* title="関連する計算ツール" … 見出しを付ける
+
+記事の中に置く例:
+
+  [fudosan_tools_index only="chukai,tedori" cols="1" style="row" title="この記事に関係する計算ツール"]
 
 = 入力値はサーバーに送りません =
 

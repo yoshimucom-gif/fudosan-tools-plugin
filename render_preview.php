@@ -68,7 +68,14 @@ function page($title, $body) {
         . '</body></html>';
 }
 
-$all = ftl_shortcode_index(array('base' => '/tools/')) . '<hr>';
+$all  = '<h2 style="font:800 20px/1.5 sans-serif;margin:0 0 10px">一覧（既定）</h2>';
+$all .= ftl_shortcode_index(array('base' => '/tools/'));
+$all .= '<h2 style="font:800 20px/1.5 sans-serif;margin:34px 0 10px">only＋cols=1＋style=row（記事の途中・サイドバー向け）</h2>';
+$all .= ftl_shortcode_index(array('base' => '/tools/', 'only' => 'chukai,jouto,tedori',
+        'cols' => '1', 'style' => 'row', 'title' => 'この記事に関係する計算ツール'));
+$all .= '<h2 style="font:800 20px/1.5 sans-serif;margin:34px 0 10px">only＋cols=3</h2>';
+$all .= ftl_shortcode_index(array('base' => '/tools/', 'only' => 'kotei,shorui,hikaku', 'cols' => '3'));
+$all .= '<hr>';
 foreach ($tools as $slug => $t) {
     $one = ftl_shortcode_tool(array('name' => $slug));
     file_put_contents("$dir/$slug.html", page($t['title'], $one));
