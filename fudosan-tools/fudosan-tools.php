@@ -2,7 +2,7 @@
 /**
  * Plugin Name: 不動産売却ツール集
  * Description: 手取り額・譲渡所得税・仲介手数料・固定資産税の日割り・ふるさと納税の上限・囲い込みチェック・特例判定・必要書類・仲介と買取の比較の9つのツールを、ショートコード1本でページに置けます。計算はすべてブラウザ内で完結し、入力値をサーバーへ送りません。
- * Version: 1.0.1
+ * Version: 1.1.0
  * Author: ミカタ株式会社
  * License: GPLv2 or later
  * Text Domain: fudosan-tools
@@ -21,7 +21,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('FTL_VER', '1.0.1');
+define('FTL_VER', '1.1.0');
 define('FTL_OPT', 'ftl_options');
 define('FTL_DIR', plugin_dir_path(__FILE__));
 define('FTL_URL', plugin_dir_url(__FILE__));
@@ -43,7 +43,8 @@ require_once __DIR__ . '/includes/tools-data.php';
 
 function ftl_defaults() {
     return array(
-        'accent'    => '#0f6f8f',
+        'accent'    => '#1F2E43',
+        'brass'     => '#BB9C5E',
         'cta_url'   => '',
         'cta_label' => 'まずは査定価格を確かめる',
         'cta_note'  => '入力は1分ほど。しつこい営業はありません',
@@ -78,14 +79,35 @@ function ftl_enqueue() {
  * 描画
  * ======================================================================= */
 
-/** 配色をCSS変数のインラインstyleに変換する */
-function ftl_accent_style() {
-    $hex = ftl_opt('accent');
-    if (!preg_match('/^#[0-9a-fA-F]{6}$/', (string) $hex)) return '';
+/** 16進の色から、濃い版と薄い版を作る */
+function ftl_shades($hex, $darken = 0.78, $lighten = 0.92) {
+    if (!preg_match('/^#[0-9a-fA-F]{6}$/', (string) $hex)) return null;
     list($r, $g, $b) = array(hexdec(substr($hex, 1, 2)), hexdec(substr($hex, 3, 2)), hexdec(substr($hex, 5, 2)));
-    $dark  = sprintf('#%02x%02x%02x', (int) ($r * 0.78), (int) ($g * 0.78), (int) ($b * 0.78));
-    $light = sprintf('#%02x%02x%02x', (int) ($r + (255 - $r) * 0.9), (int) ($g + (255 - $g) * 0.9), (int) ($b + (255 - $b) * 0.9));
-    return sprintf('--ftl-accent:%s;--ftl-accent-d:%s;--ftl-accent-l:%s;', $hex, $dark, $light);
+    return array(
+        'base'  => $hex,
+        'dark'  => sprintf('#%02x%02x%02x', (int) ($r * $darken), (int) ($g * $darken), (int) ($b * $darken)),
+        'light' => sprintf('#%02x%02x%02x',
+            (int) ($r + (255 - $r) * $lighten), (int) ($g + (255 - $g) * $lighten), (int) ($b + (255 - $b) * $lighten)),
+    );
+}
+
+/**
+ * 配色をCSS変数のインラインstyleに変換する。
+ * サイトのテーマ設定（theme_mod diver_color_custom）に合わせた2色で組む。
+ *   濃色 … ヘッダー帯・フッターと同じ紺。合計行・選択中のタイル・フォーカス
+ *   差し色 … ヘッダーCTAと同じ真鍮。ラベルの下線・矢印・ボタン
+ * 枠線そのものはCSS側の薄いグレーのまま。濃色で囲うと強すぎる。
+ */
+function ftl_accent_style() {
+    $o = ftl_opt();
+    $css = '';
+    if ($n = ftl_shades($o['accent'])) {
+        $css .= sprintf('--ftl-navy:%s;--ftl-navy-d:%s;--ftl-navy-l:%s;', $n['base'], $n['dark'], $n['light']);
+    }
+    if ($b = ftl_shades($o['brass'], 0.9, 0.9)) {
+        $css .= sprintf('--ftl-brass:%s;--ftl-brass-l:%s;', $b['base'], $b['light']);
+    }
+    return $css;
 }
 
 /** CTAブロック。URLが未設定なら何も出さない */
@@ -197,6 +219,7 @@ function ftl_sanitize($in) {
     $d = ftl_defaults();
     $o = array();
     $o['accent']    = preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($in['accent'] ?? '')) ? $in['accent'] : $d['accent'];
+    $o['brass']     = preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($in['brass'] ?? '')) ? $in['brass'] : $d['brass'];
     $o['cta_url']   = esc_url_raw(trim((string) ($in['cta_url'] ?? '')));
     $o['cta_label'] = sanitize_text_field((string) ($in['cta_label'] ?? $d['cta_label']));
     $o['cta_note']  = sanitize_text_field((string) ($in['cta_note'] ?? ''));
@@ -221,10 +244,24 @@ function ftl_settings_page() {
         <h2>配色</h2>
         <table class="form-table" role="presentation">
           <tr>
-            <th scope="row"><label for="ftl-accent">アクセントカラー</label></th>
+            <th scope="row"><label for="ftl-accent">濃色</label></th>
             <td>
               <input type="color" id="ftl-accent" name="<?php echo FTL_OPT; ?>[accent]" value="<?php echo esc_attr($o['accent']); ?>">
-              <p class="description">選択中のタイル、見出しのラベル、ボタンの色です。濃い色・薄い色は自動で作ります。</p>
+              <p class="description">
+                合計行の罫、選択中のタイル、フォーカス枠に使います。
+                サイトのヘッダー帯・フッターと同じ色（カスタマイズ &gt; カラー の「サブ」）を入れてください。
+                既定は <code>#1F2E43</code>。
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row"><label for="ftl-brass">差し色</label></th>
+            <td>
+              <input type="color" id="ftl-brass" name="<?php echo FTL_OPT; ?>[brass]" value="<?php echo esc_attr($o['brass']); ?>">
+              <p class="description">
+                ラベルの下線、一覧カードの矢印、ボタンに使います。
+                サイトのヘッダーにあるCTAボタンと同じ色が揃います。既定は <code>#BB9C5E</code>。
+              </p>
             </td>
           </tr>
         </table>

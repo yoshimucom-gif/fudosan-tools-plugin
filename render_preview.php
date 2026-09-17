@@ -23,7 +23,8 @@ function shortcode_atts($pairs, $atts, $sc = '') {
     return $out;
 }
 $GLOBALS['ftl_preview_opt'] = array(
-    'accent'    => '#0f6f8f',
+    'accent'    => '#1F2E43',
+    'brass'     => '#BB9C5E',
     'cta_url'   => 'https://example.com/satei/',
     'cta_label' => 'まずは査定価格を確かめる',
     'cta_note'  => '入力は1分ほど。しつこい営業はありません',
