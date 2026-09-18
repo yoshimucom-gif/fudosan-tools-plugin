@@ -335,8 +335,13 @@
 
 /* 解説 */
 .ftl-desc { margin-top: 28px; }
-.ftl-desc h3 { font-size: 18px; font-weight: 800; margin: 24px 0 9px; padding-bottom: 6px; border-bottom: 2px solid var(--ftl-navy); }
-.ftl-desc h3:first-child { margin-top: 0; }
+/* 解説の見出し。テーマが h2 に白文字の装飾を当ててくるので、色と背景を明示して打ち消す */
+.ftl-desc h2, .ftl-desc h3 { font-size: 21px; font-weight: 800; color: var(--ftl-navy);
+  background: none; margin: 26px 0 10px; padding: 0 0 6px; border: 0;
+  border-bottom: 2px solid var(--ftl-navy); line-height: 1.5; text-align: left; }
+.ftl-desc h2::before, .ftl-desc h2::after,
+.ftl-desc h3::before, .ftl-desc h3::after { content: none; display: none; background: none; }
+.ftl-desc h2:first-child, .ftl-desc h3:first-child { margin-top: 0; }
 .ftl-desc p { font-size: 15px; color: var(--ftl-ink-2); margin-bottom: 11px; }
 .ftl-desc ul { padding-left: 1.3em; margin-bottom: 11px; }
 .ftl-desc li { font-size: 15px; color: var(--ftl-ink-2); margin-bottom: 5px; }
